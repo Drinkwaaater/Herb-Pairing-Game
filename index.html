@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>中藥配對遊戲</title>
+<style>
+:root{--ink:#24352c;--muted:#64736a;--paper:#fbf8ef;--card:#fffdf7;--green:#285b45;--green2:#dcebdd;--gold:#d9ad54;--line:#d9dfd2;--red:#a94b3d;--shadow:0 10px 28px #233d2a12}
+*{box-sizing:border-box}
+html, body{height:100%;margin:0;overflow:hidden}
+body{background:var(--paper);color:var(--ink);font-family:"Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif;display:flex;flex-direction:column;justify-content:space-between;padding:12px}
+main{max-width:1100px;width:100%;margin:auto;display:flex;flex-direction:column;gap:10px;flex:1;justify-content:center}
+.toolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.progress-wrap{flex:1;min-width:150px;background:#e5e9df;height:8px;border-radius:20px;overflow:hidden}
+#progress{height:100%;width:0;background:var(--gold);transition:width .25s}
+.score{font-weight:800;color:var(--green);white-space:nowrap;font-size:0.95rem}
+button{font:inherit;border:0;border-radius:10px;padding:8px 12px;cursor:pointer;font-weight:700;transition:transform .15s,background .15s;font-size:0.9rem}
+button:active{transform:scale(.98)}
+.primary{background:var(--green);color:white}.secondary{background:#e8eee5;color:var(--green)}
+.layout{display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:stretch}
+.panel{background:#f1f2e9;border:1px solid var(--line);border-radius:14px;padding:12px;display:flex;flex-direction:column}
+.panel h2{font-size:1.05rem;margin:0 0 2px}
+.panel .hint{font-size:0.82rem;color:var(--muted);margin:0 0 10px}
+.herb-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;overflow-y:auto}
+.herb-card{background:var(--card);border:2px solid var(--line);border-radius:10px;padding:8px;cursor:grab;user-select:none;box-shadow:0 2px 0 #d8ded3;touch-action:manipulation;display:flex;flex-direction:column;align-items:center;text-align:center}
+.herb-card:active{cursor:grabbing}
+.herb-card.selected{border-color:var(--green);background:#edf5e9;box-shadow:0 0 0 3px #285b451c}
+.herb-card.matched{border-color:#6b9a71;background:#e3f0df;cursor:default;box-shadow:none;opacity:0.6}
+.herb-photo{display:block;width:100%;height:75px;object-fit:cover;border-radius:8px;margin-bottom:4px;background:#e8eee5;border:1px solid #d9dfd2}
+.herb-card.matched .herb-photo{border:2px solid #6b9a71}
+.match-photo{width:100%;max-height:180px;object-fit:cover;border-radius:10px;margin:8px 0;border:1px solid var(--line)}
+
+.herb-name{font-weight:800;font-size:0.95rem}
+.herb-sub{font-size:0.75rem;color:var(--muted)}
+.drop-list{display:grid;gap:8px;overflow-y:auto}
+.drop-card{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;background:var(--card);border:2px dashed #c9d2c5;border-radius:10px;padding:10px;transition:.15s;cursor:pointer;touch-action:manipulation}
+.drop-card.dragover{border-color:var(--green);background:#eaf3e6}
+.drop-card.matched{border-style:solid;border-color:#6b9a71;background:#e3f0df;cursor:default}
+.drop-title{font-weight:800;font-size:0.9rem}
+.drop-desc{font-size:0.8rem;color:var(--muted)}
+.drop-result{font-size:0.8rem;font-weight:800;color:var(--green);text-align:right}
+.drop-card.wrong{border-color:var(--red);background:#fff0ec}
+footer{text-align:center;color:var(--muted);font-size:0.75rem;padding:4px 0}
+
+/* Modal 彈跳視窗樣式 */
+.modal-backdrop{display:none;position:fixed;inset:0;background:#122016b3;z-index:10;align-items:center;justify-content:center;padding:16px;animation:fadeIn .2s ease}
+.modal{background:var(--card);max-width:480px;width:100%;padding:20px;border-radius:16px;box-shadow:var(--shadow);max-height:90vh;overflow-y:auto}
+.modal h2{margin-top:0;color:var(--green);font-size:1.3rem}
+.modal button{width:100%;margin-top:12px;padding:10px;font-size:0.95rem}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+
+@media(max-width:760px){
+ body{overflow:auto;height:auto}
+ html{overflow:auto}
+ .layout{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<main>
+<div class="toolbar">
+<div class="score" id="score">已完成 0 / 5</div>
+<div class="progress-wrap" aria-label="配對進度"><div id="progress"></div></div>
+<button class="secondary" id="helpBtn">遊戲說明</button>
+<button class="secondary" id="resetBtn">重新開始</button>
+</div>
+<div class="layout">
+<section class="panel">
+<h2>第一區｜選擇藥材</h2>
+<p class="hint">點選或拖曳藥材卡片至右側。</p>
+<div class="herb-grid" id="herbGrid"></div>
+</section>
+<section class="panel">
+<h2>第二區｜配對性質與功效</h2>
+<p class="hint">選出最符合該藥材的描述。</p>
+<div class="drop-list" id="dropList"></div>
+</section>
+</div>
+</main>
+<footer>
+內容為中醫藥文化教育用途，所列功效為傳統中醫藥的概括說明，不代表現代醫學療效，也不能作為自行用藥或治療建議。中藥材的使用方式與適用性，請諮詢合格中醫師或藥師。
+</footer>
+
+<!-- 說明視窗 -->
+<div class="modal-backdrop" id="helpModal" role="dialog" aria-modal="true" aria-labelledby="helpTitle">
+<div class="modal">
+<h2 id="helpTitle">遊戲說明</h2>
+<ol>
+<li>拖曳或點選左側藥材卡片，配對到右側正確的描述上。</li>
+<li>答對後會彈出視窗顯示詳細藥材知識與照片，點擊「繼續挑戰」即可進行下一題。</li>
+</ol>
+<button class="primary" id="closeHelp">開始配對</button>
+</div></div>
+
+<!-- 答對時彈出的藥材介紹視窗 -->
+<div class="modal-backdrop" id="successModal" role="dialog" aria-modal="true" aria-labelledby="successTitle">
+<div class="modal">
+<h2 id="successTitle">🎉 答對了！</h2>
+<div id="successModalContent"></div>
+<button class="primary" id="nextBtn">繼續挑戰</button>
+</div></div>
+
+<!-- 挑戰完成彈出的恭喜視窗 -->
+<div class="modal-backdrop" id="resultModal" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
+<div class="modal" style="text-align: center;">
+<h2 id="resultTitle" style="color: var(--green);">🏆 恭喜完成挑戰！</h2>
+<p id="resultText" style="margin: 12px 0; font-size: 1rem;"></p>
+<p style="color: var(--muted); font-size: 0.85rem;">你已認識五種藥材的入門知識。可點擊下方按鈕重新開始！</p>
+<button class="primary" id="restartModalBtn">再玩一次</button>
+</div></div>
+
+<script>
+const herbs = [
+ {id:"mint",name:"薄荷",symbol:"葉",sub:"清新芳香的葉片",image:"https://commons.wikimedia.org/wiki/Special:FilePath/Mentha%20arvensis%20%288444876666%29.jpg?width=900",imageSource:"https://commons.wikimedia.org/wiki/File:Mentha_arvensis_(8444876666).jpg",imageAlt:"薄荷植株照片",property:"辛、涼",effect:"疏散風熱、利咽透疹",detail:"薄荷性味辛涼，傳統上常用來疏散風熱，也常見於與咽喉相關的中藥方中。"},
+ {id:"chrysanthemum",name:"菊花",symbol:"花",sub:"常見的乾燥花材",image:"https://commons.wikimedia.org/wiki/Special:FilePath/Chrysanthemum%20%C3%97%20morifolium%20flowers.jpg?width=900",imageSource:"https://commons.wikimedia.org/wiki/File:Chrysanthemum_%C3%97_morifolium_flowers.jpg",imageAlt:"菊花照片",property:"甘、苦，微寒（常見記載）",effect:"疏風清熱、平肝明目",detail:"菊花在傳統中醫藥中常與清熱、明目相關；不同菊花品種與炮製方式可能有所差異。"},
+ {id:"angelica",name:"當歸",symbol:"根",sub:"具有濃郁香氣的根部",image:"https://commons.wikimedia.org/wiki/Special:FilePath/Dried%20angelica%20slices%20%282%29.jpg?width=900",imageSource:"https://commons.wikimedia.org/wiki/File:Dried_angelica_slices_(2).jpg",imageAlt:"乾燥當歸切片照片",property:"甘、辛、苦，溫",effect:"補血活血、調經止痛",detail:"當歸是常見的根類中藥材，傳統功效常概括為補血、活血與調經止痛。"},
+ {id:"jujube",name:"紅棗",symbol:"果",sub:"紅色或深紅色果實",image:"https://www.baldwins.co.uk/cdn/shop/files/CHREDDA_n_c2aa31e3-a70a-4a3a-8001-96683064ec8f.jpg?width=900",imageSource:"https://www.baldwins.co.uk/products/baldwins-red-dates-da-zao-chinese-herb",imageAlt:"紅棗果實照片",property:"甘、溫（常見記載）",effect:"補中益氣、養血安神（傳統概括）",detail:"紅棗常作為食材，也見於傳統方劑。這裡介紹的是傳統本草概念，不等於食用即可治療疾病。"},
+ {id:"goji",name:"枸杞",symbol:"果",sub:"橘紅色的小果實",image:"https://commons.wikimedia.org/wiki/Special:FilePath/Dried%20wolfberry%20closeup.jpg?width=900",imageSource:"https://commons.wikimedia.org/wiki/File:Dried_wolfberry_closeup.jpg",imageAlt:"乾燥枸杞照片",property:"甘、平",effect:"滋補肝腎、益精明目",detail:"枸杞子在傳統中醫藥中常與滋補肝腎、明目等概念相關，也常被用於料理。"}
+];
+const descriptions = [
+ {id:"d1",herb:"mint",title:"性味：辛、涼",desc:"傳統功效：疏散風熱、利咽透疹"},
+ {id:"d2",herb:"chrysanthemum",title:"性味：甘、苦，微寒",desc:"傳統功效：疏風清熱、平肝明目"},
+ {id:"d3",herb:"angelica",title:"性味：甘、辛、苦，溫",desc:"傳統功效：補血活血、調經止痛"},
+ {id:"d4",herb:"jujube",title:"性味：甘、溫",desc:"傳統功效：補中益氣、養血安神"},
+ {id:"d5",herb:"goji",title:"性味：甘、平",desc:"傳統功效：滋補肝腎、益精明目"}
+];
+let selected=null, matched=new Set(), attempts=0, startedAt=Date.now(), firstTryWrong=new Set();
+const herbGrid=document.getElementById("herbGrid"), dropList=document.getElementById("dropList");
+const score=document.getElementById("score"), progress=document.getElementById("progress");
+const successModal=document.getElementById("successModal"), successModalContent=document.getElementById("successModalContent");
+const resultModal=document.getElementById("resultModal"), resultText=document.getElementById("resultText");
+
+function shuffle(a){for(let i=a.length-1;i>0;i--){let j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+
+function render(){
+ herbGrid.innerHTML="";dropList.innerHTML="";
+ herbs.forEach(h=>{
+  const el=document.createElement("div");el.className="herb-card";el.draggable=true;el.tabIndex=0;el.dataset.id=h.id;
+  if(matched.has(h.id)) el.classList.add("matched");
+  el.innerHTML=`<img class="herb-photo" src="${h.image}" alt="${h.imageAlt}" loading="lazy" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='';this.alt='照片載入失敗';"><span class="herb-name">${h.name}</span><div class="herb-sub">${h.sub}</div>`;
+  el.addEventListener("dragstart",e=>{if(matched.has(h.id)){e.preventDefault();return}e.dataTransfer.setData("text/plain",h.id);selected=h.id;updateSelected()});
+  el.addEventListener("click",()=>{if(matched.has(h.id))return;selected=selected===h.id?null:h.id;updateSelected();});
+  el.addEventListener("keydown",e=>{if((e.key==="Enter"||e.key===" ")&&!matched.has(h.id)){e.preventDefault();el.click()}});
+  herbGrid.appendChild(el);
+ });
+
+ shuffle([...descriptions]).forEach(d=>{
+  const isMatched = matched.has(d.herb);
+  const el=document.createElement("div");el.className="drop-card"+(isMatched?" matched":"");el.dataset.herb=d.herb;el.tabIndex=0;el.setAttribute("role","button");el.setAttribute("aria-label",d.title+"；"+d.desc);
+  el.innerHTML=`<div><div class="drop-title">${d.title}</div><div class="drop-desc">${d.desc}</div></div><div class="drop-result">${isMatched?"配對完成":"待配對"}</div>`;
+  
+  if(!isMatched){
+   el.addEventListener("dragover",e=>{e.preventDefault();el.classList.add("dragover")});
+   el.addEventListener("dragleave",()=>el.classList.remove("dragover"));
+   el.addEventListener("drop",e=>{e.preventDefault();el.classList.remove("dragover");attempt(e.dataTransfer.getData("text/plain"),d.herb,el)});
+   el.addEventListener("click",()=>{if(selected)attempt(selected,d.herb,el);else{}});
+  }
+  dropList.appendChild(el);
+ });
+ updateSelected();updateScore();
+}
+
+function updateSelected(){document.querySelectorAll(".herb-card").forEach(el=>el.classList.toggle("selected",el.dataset.id===selected));}
+
+function attempt(herbId,descHerb,card){
+ if(!herbId) return;
+ if(matched.has(herbId)) return;
+ if(matched.has(descHerb)) return;
+ attempts++;
+ 
+ if(herbId===descHerb){
+  matched.add(herbId);selected=null;
+  card.classList.add("matched");card.classList.remove("wrong");card.querySelector(".drop-result").textContent="配對完成";
+  const h=herbs.find(x=>x.id===herbId);
+  document.querySelector(`.herb-card[data-id="${herbId}"]`)?.classList.add("matched");
+  showSuccessModal(h);
+  updateSelected();updateScore();
+ }else{
+  firstTryWrong.add(herbId);card.classList.add("wrong");selected=null;updateSelected();
+  setTimeout(()=>card.classList.remove("wrong"),650);
+ }
+}
+
+function showSuccessModal(h){
+ successModalContent.innerHTML = `
+  <p><strong>${h.name}</strong> (${h.sub})</p>
+  <img class="match-photo" src="${h.image}" alt="${h.imageAlt}" loading="lazy" referrerpolicy="no-referrer">
+  <p style="margin:6px 0;"><strong>性味：</strong>${h.property}</p>
+  <p style="margin:6px 0;"><strong>功效：</strong>${h.effect}</p>
+  <p style="margin:6px 0; font-size:0.85rem; color:var(--muted);">${h.detail}</p>
+  <div style="font-size:0.75rem; color:var(--muted); margin-top:4px;"><a href="${h.imageSource}" target="_blank" rel="noopener noreferrer">查看照片原始來源</a></div>
+ `;
+ successModal.style.display="flex";
+}
+
+document.getElementById("nextBtn").addEventListener("click",()=>{
+ successModal.style.display="none";
+ if(matched.size===herbs.length){
+  resultText.textContent=`你完成了全部 5 組配對，共嘗試 ${attempts} 次，花費 ${Math.round((Date.now()-startedAt)/1000)} 秒。`;
+  resultModal.style.display="flex";
+ }
+});
+
+document.getElementById("restartModalBtn").addEventListener("click",()=>{
+ resultModal.style.display="none";
+ selected=null;matched=new Set();attempts=0;firstTryWrong=new Set();startedAt=Date.now();
+ render();
+});
+
+function updateScore(){score.textContent=`已完成 ${matched.size} / ${herbs.length}`;progress.style.width=(matched.size/herbs.length*100)+"%"}
+
+document.getElementById("resetBtn").addEventListener("click",()=>{selected=null;matched=new Set();attempts=0;firstTryWrong=new Set();startedAt=Date.now();resultModal.style.display="none";render();});
+
+const modal=document.getElementById("helpModal");
+document.getElementById("helpBtn").addEventListener("click",()=>modal.style.display="flex");
+document.getElementById("closeHelp").addEventListener("click",()=>modal.style.display="none");
+modal.addEventListener("click",e=>{if(e.target===modal)modal.style.display="none"});
+
+render();
+</script>
+</body>
+</html>
